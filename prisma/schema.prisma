@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CategoryKind {
+  income
+  expense
+  both
+}
+
+enum PaymentStatus {
+  paid
+  pending
+  late
+}
+
+enum PaymentMethod {
+  Dinheiro
+  Pix
+  Debito
+  Credito
+  Boleto
+  Transferencia
+}
+
+enum Priority {
+  low
+  medium
+  high
+}
+
+model Category {
+  id           String         @id @default(cuid())
+  name         String
+  kind         CategoryKind
+  color        String
+  icon         String?
+  custom       Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  incomes      Income[]
+  expenses     Expense[]
+  fixed        FixedExpense[]
+  installments Installment[]
+}
+
+model Income {
+  id         String   @id @default(cuid())
+  name       String
+  amount     Decimal  @db.Decimal(14, 2)
+  date       DateTime @db.Date
+  recurring  Boolean  @default(false)
+  received   Boolean  @default(true)
+  notes      String?
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Expense {
+  id         String        @id @default(cuid())
+  name       String
+  amount     Decimal       @db.Decimal(14, 2)
+  date       DateTime      @db.Date
+  method     PaymentMethod
+  status     PaymentStatus
+  notes      String?
+  categoryId String
+  category   Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model FixedExpense {
+  id         String   @id @default(cuid())
+  name       String
+  amount     Decimal  @db.Decimal(14, 2)
+  dueDay     Int
+  active     Boolean  @default(true)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Installment {
+  id           String   @id @default(cuid())
+  name         String
+  totalAmount  Decimal  @db.Decimal(14, 2)
+  installments Int
+  firstDate    DateTime @db.Date
+  paidIndices  Int[]
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Goal {
+  id         String    @id @default(cuid())
+  name       String
+  target     Decimal   @db.Decimal(14, 2)
+  saved      Decimal   @db.Decimal(14, 2)
+  deadline   DateTime? @db.Date
+  priority   Priority
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}

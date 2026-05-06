@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CategorySelect } from "@/components/finance/CategorySelect";
-import { categoryById, store, useHydrate, useStore } from "@/lib/finance/store";
+import { useFinanceActions } from "@/lib/finance/actions";
+import { categoryById, useHydrate, useStore } from "@/lib/finance/store";
 import { brl, formatDateBR, sameMonth, todayISO } from "@/lib/finance/format";
 import type { Expense, PaymentMethod, PaymentStatus } from "@/lib/finance/types";
 import { toast } from "sonner";
@@ -62,6 +63,7 @@ function emptyForm(): Omit<Expense, "id"> {
 function Page() {
   useHydrate();
   const data = useStore();
+  const actions = useFinanceActions();
   const [month, setMonth] = useState(() => new Date());
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -87,14 +89,14 @@ function Page() {
     setForm({ ...e });
     setOpen(true);
   }
-  function submit() {
+  async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.amount <= 0) return toast.error("Valor deve ser maior que zero");
     if (editing) {
-      store.updateExpense(editing.id, form);
+      await actions.updateExpense(editing.id, form);
       toast.success("Gasto atualizado");
     } else {
-      store.addExpense(form);
+      await actions.addExpense(form);
       toast.success("Gasto adicionado");
     }
     setOpen(false);
@@ -168,9 +170,7 @@ function Page() {
                         {STATUS.find((s) => s.v === e.status)?.label}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold">
-                      {brl(e.amount)}
-                    </td>
+                    <td className="px-4 py-3 text-right font-semibold">{brl(e.amount)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="icon" variant="ghost" onClick={() => openEdit(e)}>
@@ -179,8 +179,8 @@ function Page() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => {
-                            store.removeExpense(e.id);
+                          onClick={async () => {
+                            await actions.removeExpense(e.id);
                             toast.success("Gasto removido");
                           }}
                         >
@@ -217,9 +217,7 @@ function Page() {
                   type="number"
                   step="0.01"
                   value={form.amount || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, amount: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
                 />
               </div>
               <div className="grid gap-1.5">
@@ -236,9 +234,7 @@ function Page() {
                 <Label>Forma de pagamento</Label>
                 <Select
                   value={form.method}
-                  onValueChange={(v) =>
-                    setForm({ ...form, method: v as PaymentMethod })
-                  }
+                  onValueChange={(v) => setForm({ ...form, method: v as PaymentMethod })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -256,9 +252,7 @@ function Page() {
                 <Label>Status</Label>
                 <Select
                   value={form.status}
-                  onValueChange={(v) =>
-                    setForm({ ...form, status: v as PaymentStatus })
-                  }
+                  onValueChange={(v) => setForm({ ...form, status: v as PaymentStatus })}
                 >
                   <SelectTrigger>
                     <SelectValue />

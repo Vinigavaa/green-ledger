@@ -17,8 +17,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CategorySelect } from "@/components/finance/CategorySelect";
-import { categoryById, store, useHydrate, useStore } from "@/lib/finance/store";
-import { brl, formatDateBR, sameMonth, todayISO } from "@/lib/finance/format";
+import { useFinanceActions } from "@/lib/finance/actions";
+import {
+  categoryById,
+  incomesInMonth,
+  type MaterializedIncome,
+  useHydrate,
+  useStore,
+} from "@/lib/finance/store";
+import { brl, formatDateBR, todayISO } from "@/lib/finance/format";
 import type { Income } from "@/lib/finance/types";
 import { toast } from "sonner";
 
@@ -33,12 +40,14 @@ function emptyForm(): Omit<Income, "id"> {
     date: todayISO(),
     categoryId: "cat-salario",
     recurring: false,
+    received: true,
   };
 }
 
 function Page() {
   useHydrate();
   const data = useStore();
+  const actions = useFinanceActions();
   const [month, setMonth] = useState(() => new Date());
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -46,12 +55,12 @@ function Page() {
   const [form, setForm] = useState(emptyForm());
 
   const filtered = useMemo(() => {
-    return data.incomes
-      .filter((i) => sameMonth(i.date, month))
-      .filter((i) => i.name.toLowerCase().includes(query.toLowerCase()));
-  }, [data.incomes, month, query]);
+    return incomesInMonth(data, month).filter((i) =>
+      i.name.toLowerCase().includes(query.toLowerCase()),
+    );
+  }, [data, month, query]);
 
-  const total = filtered.reduce((a, b) => a + b.amount, 0);
+  const total = filtered.filter((income) => income.received).reduce((a, b) => a + b.amount, 0);
 
   function openNew() {
     setEditing(null);
@@ -63,14 +72,14 @@ function Page() {
     setForm({ ...i });
     setOpen(true);
   }
-  function submit() {
+  async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.amount <= 0) return toast.error("Valor deve ser maior que zero");
     if (editing) {
-      store.updateIncome(editing.id, form);
+      await actions.updateIncome(editing.id, form);
       toast.success("Receita atualizada");
     } else {
-      store.addIncome(form);
+      await actions.addIncome(form);
       toast.success("Receita adicionada");
     }
     setOpen(false);
@@ -109,6 +118,7 @@ function Page() {
                 <th className="px-4 py-3 text-left">Nome</th>
                 <th className="hidden px-4 py-3 text-left sm:table-cell">Categoria</th>
                 <th className="hidden px-4 py-3 text-left sm:table-cell">Data</th>
+                <th className="px-4 py-3 text-center">Recebida</th>
                 <th className="px-4 py-3 text-right">Valor</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -125,6 +135,11 @@ function Page() {
                           Recorrente
                         </span>
                       )}
+                      {i.projected && (
+                        <span className="ml-2 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                          Projetada
+                        </span>
+                      )}
                     </td>
                     <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                       {c?.name ?? "—"}
@@ -132,19 +147,38 @@ function Page() {
                     <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                       {formatDateBR(i.date)}
                     </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-center">
+                        <Switch
+                          checked={i.received}
+                          onCheckedChange={async (checked) => {
+                            await actions.setIncomeReceived(i as MaterializedIncome, checked);
+                            toast.success(
+                              checked ? "Receita marcada como recebida" : "Receita desmarcada",
+                            );
+                          }}
+                        />
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold text-success">
                       {brl(i.amount)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(i)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          disabled={Boolean(i.projected)}
+                          onClick={() => openEdit(i)}
+                        >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => {
-                            store.removeIncome(i.id);
+                          disabled={Boolean(i.projected)}
+                          onClick={async () => {
+                            await actions.removeIncome(i.id);
                             toast.success("Receita removida");
                           }}
                         >
@@ -184,9 +218,7 @@ function Page() {
                   type="number"
                   step="0.01"
                   value={form.amount || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, amount: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
                 />
               </div>
               <div className="grid gap-1.5">
@@ -210,13 +242,23 @@ function Page() {
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Receita recorrente</p>
-                <p className="text-xs text-muted-foreground">
-                  Marque se acontece todo mês
-                </p>
+                <p className="text-xs text-muted-foreground">Marque se acontece todo mês</p>
               </div>
               <Switch
                 checked={form.recurring}
                 onCheckedChange={(v) => setForm({ ...form, recurring: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Receita recebida</p>
+                <p className="text-xs text-muted-foreground">
+                  Somente receitas recebidas entram nos cÃ¡lculos
+                </p>
+              </div>
+              <Switch
+                checked={form.received}
+                onCheckedChange={(v) => setForm({ ...form, received: v })}
               />
             </div>
           </div>

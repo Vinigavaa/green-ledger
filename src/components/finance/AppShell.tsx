@@ -22,7 +22,7 @@ const nav = [
   { to: "/parcelas", label: "Parcelas", icon: CreditCard },
   { to: "/objetivos", label: "Objetivos", icon: Target },
   { to: "/planejamento", label: "Planejamento", icon: CalendarRange },
-  { to: "/relatorios", label: "Relatórios", icon: PieChart },
+  { to: "/relatorios", label: "Relatorios", icon: PieChart },
   { to: "/categorias", label: "Categorias", icon: Tags },
 ] as const;
 
@@ -38,15 +38,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div>
             <p className="text-sm font-semibold">FinFlow</p>
-            <p className="text-xs text-muted-foreground">Finanças pessoais</p>
+            <p className="text-xs text-muted-foreground">Financas pessoais</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-2">
           {nav.map((item) => {
             const active =
-              item.to === "/"
-                ? loc.pathname === "/"
-                : loc.pathname.startsWith(item.to);
+              item.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(item.to);
             const Icon = item.icon;
             return (
               <Link
@@ -65,9 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="px-6 py-4 text-xs text-muted-foreground">
-          v1.0 · Dados locais
-        </div>
+        <div className="px-6 py-4 text-xs text-muted-foreground">v1.0 - Postgres / Neon</div>
       </aside>
 
       {/* Mobile top bar */}
@@ -81,10 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-background/95 backdrop-blur lg:hidden">
         {nav.slice(0, 5).map((item) => {
-          const active =
-            item.to === "/"
-              ? loc.pathname === "/"
-              : loc.pathname.startsWith(item.to);
+          const active = item.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(item.to);
           const Icon = item.icon;
           return (
             <Link

@@ -1,192 +1,95 @@
-import { useEffect, useSyncExternalStore } from "react";
-import type {
-  Category,
-  DataStore,
-  Expense,
-  FixedExpense,
-  Goal,
-  Income,
-  Installment,
-} from "./types";
-import { SEED } from "./seed";
-import { sameMonth, uid } from "./format";
+import { createContext, createElement, useContext } from "react";
+import type { ReactNode } from "react";
+import type { Category, DataStore, Income, Installment } from "./types";
+import { sameMonth } from "./format";
 
-const KEY = "finflow.store.v1";
+const FinanceDataContext = createContext<DataStore | null>(null);
 
-let state: DataStore = load();
-
-const listeners = new Set<() => void>();
-function load(): DataStore {
-  if (typeof window === "undefined") return SEED;
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return SEED;
-    return JSON.parse(raw) as DataStore;
-  } catch {
-    return SEED;
-  }
-}
-function persist() {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(state));
-}
-function notify() {
-  persist();
-  listeners.forEach((l) => l());
-}
-function subscribe(l: () => void) {
-  listeners.add(l);
-  return () => listeners.delete(l);
-}
-function getSnapshot() {
-  return state;
-}
-function getServerSnapshot() {
-  return SEED;
+export function FinanceDataProvider({ data, children }: { data: DataStore; children: ReactNode }) {
+  return createElement(FinanceDataContext.Provider, { value: data }, children);
 }
 
 export function useStore() {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const data = useContext(FinanceDataContext);
+  if (!data) {
+    throw new Error("Finance data is not available in context");
+  }
+  return data;
 }
 
-// Garante hidratação: lê localStorage no cliente após mount
 export function useHydrate() {
-  useEffect(() => {
-    state = load();
-    notify();
-  }, []);
+  return;
 }
 
-// Mutations
-export const store = {
-  reset() {
-    state = SEED;
-    notify();
-  },
-  addIncome(i: Omit<Income, "id">) {
-    state = { ...state, incomes: [{ ...i, id: uid() }, ...state.incomes] };
-    notify();
-  },
-  updateIncome(id: string, patch: Partial<Income>) {
-    state = {
-      ...state,
-      incomes: state.incomes.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-    };
-    notify();
-  },
-  removeIncome(id: string) {
-    state = { ...state, incomes: state.incomes.filter((x) => x.id !== id) };
-    notify();
-  },
-  addExpense(e: Omit<Expense, "id">) {
-    state = { ...state, expenses: [{ ...e, id: uid() }, ...state.expenses] };
-    notify();
-  },
-  updateExpense(id: string, patch: Partial<Expense>) {
-    state = {
-      ...state,
-      expenses: state.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-    };
-    notify();
-  },
-  removeExpense(id: string) {
-    state = { ...state, expenses: state.expenses.filter((x) => x.id !== id) };
-    notify();
-  },
-  addFixed(f: Omit<FixedExpense, "id">) {
-    state = { ...state, fixed: [{ ...f, id: uid() }, ...state.fixed] };
-    notify();
-  },
-  updateFixed(id: string, patch: Partial<FixedExpense>) {
-    state = {
-      ...state,
-      fixed: state.fixed.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-    };
-    notify();
-  },
-  removeFixed(id: string) {
-    state = { ...state, fixed: state.fixed.filter((x) => x.id !== id) };
-    notify();
-  },
-  addInstallment(i: Omit<Installment, "id" | "paidIndices"> & { paidIndices?: number[] }) {
-    state = {
-      ...state,
-      installments: [
-        { ...i, id: uid(), paidIndices: i.paidIndices ?? [] },
-        ...state.installments,
-      ],
-    };
-    notify();
-  },
-  updateInstallment(id: string, patch: Partial<Installment>) {
-    state = {
-      ...state,
-      installments: state.installments.map((x) =>
-        x.id === id ? { ...x, ...patch } : x,
-      ),
-    };
-    notify();
-  },
-  toggleInstallmentPaid(id: string, idx: number) {
-    state = {
-      ...state,
-      installments: state.installments.map((x) => {
-        if (x.id !== id) return x;
-        const has = x.paidIndices.includes(idx);
-        return {
-          ...x,
-          paidIndices: has
-            ? x.paidIndices.filter((i) => i !== idx)
-            : [...x.paidIndices, idx].sort((a, b) => a - b),
-        };
-      }),
-    };
-    notify();
-  },
-  removeInstallment(id: string) {
-    state = {
-      ...state,
-      installments: state.installments.filter((x) => x.id !== id),
-    };
-    notify();
-  },
-  addGoal(g: Omit<Goal, "id">) {
-    state = { ...state, goals: [{ ...g, id: uid() }, ...state.goals] };
-    notify();
-  },
-  updateGoal(id: string, patch: Partial<Goal>) {
-    state = {
-      ...state,
-      goals: state.goals.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-    };
-    notify();
-  },
-  removeGoal(id: string) {
-    state = { ...state, goals: state.goals.filter((x) => x.id !== id) };
-    notify();
-  },
-  addCategory(c: Omit<Category, "id">) {
-    state = {
-      ...state,
-      categories: [...state.categories, { ...c, id: uid(), custom: true }],
-    };
-    notify();
-  },
-  removeCategory(id: string) {
-    state = {
-      ...state,
-      categories: state.categories.filter((c) => c.id !== id),
-    };
-    notify();
-  },
-};
-
-// ===== Derived helpers =====
 export function categoryById(s: DataStore, id: string) {
   return s.categories.find((c) => c.id === id);
 }
 
-// Parcelas que caem em determinado mês de referência
+export interface MaterializedIncome extends Income {
+  projected?: boolean;
+  sourceId?: string;
+}
+
+function monthKey(date: Date) {
+  return date.getFullYear() * 12 + date.getMonth();
+}
+
+function projectedRecurringDate(sourceDate: string, ref: Date) {
+  const start = new Date(sourceDate);
+  const lastDayOfMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
+  const day = Math.min(start.getDate(), lastDayOfMonth);
+  return new Date(ref.getFullYear(), ref.getMonth(), day);
+}
+
+function isMaterializedRecurringIncome(
+  source: Income,
+  income: Income,
+  ref: Date,
+  projectedDate: Date,
+) {
+  return (
+    sameMonth(income.date, ref) &&
+    income.name === source.name &&
+    income.categoryId === source.categoryId &&
+    income.amount === source.amount &&
+    new Date(income.date).getDate() === projectedDate.getDate()
+  );
+}
+
+export function incomesInMonth(s: DataStore, ref: Date): MaterializedIncome[] {
+  const refKey = monthKey(ref);
+  const actual = s.incomes.filter((income) => sameMonth(income.date, ref));
+  const projected = s.incomes
+    .filter((income) => {
+      if (!income.recurring) return false;
+      const start = new Date(income.date);
+      return monthKey(start) < refKey;
+    })
+    .map((income) => {
+      const projectedDate = projectedRecurringDate(income.date, ref);
+      const hasMaterializedIncome = actual.some((candidate) =>
+        isMaterializedRecurringIncome(income, candidate, ref, projectedDate),
+      );
+      if (hasMaterializedIncome) return null;
+
+      const year = projectedDate.getFullYear();
+      const month = String(projectedDate.getMonth() + 1).padStart(2, "0");
+      const day = String(projectedDate.getDate()).padStart(2, "0");
+
+      return {
+        ...income,
+        id: `${income.id}::${year}-${month}`,
+        date: `${year}-${month}-${day}`,
+        received: false,
+        projected: true,
+        sourceId: income.id,
+      } satisfies MaterializedIncome;
+    })
+    .filter((income): income is MaterializedIncome => income !== null);
+
+  return [...actual, ...projected].sort((a, b) => b.date.localeCompare(a.date));
+}
+
 export function installmentsInMonth(s: DataStore, ref: Date) {
   const out: Array<{
     installment: Installment;
@@ -214,8 +117,21 @@ export function installmentsInMonth(s: DataStore, ref: Date) {
   return out;
 }
 
+function hasPriorActivity(s: DataStore, ref: Date) {
+  const refKey = monthKey(ref);
+  return (
+    s.incomes.some((income) => monthKey(new Date(income.date)) < refKey) ||
+    s.expenses.some((expense) => monthKey(new Date(expense.date)) < refKey) ||
+    s.installments.some((installment) => monthKey(new Date(installment.firstDate)) < refKey)
+  );
+}
+
+function previousMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() - 1, 1);
+}
+
 export function monthSummary(s: DataStore, ref: Date) {
-  const incomes = s.incomes.filter((i) => sameMonth(i.date, ref));
+  const incomes = incomesInMonth(s, ref).filter((income) => income.received);
   const incomesTotal = incomes.reduce((a, b) => a + b.amount, 0);
 
   const expenses = s.expenses.filter((e) => sameMonth(e.date, ref));
@@ -231,13 +147,17 @@ export function monthSummary(s: DataStore, ref: Date) {
   const instTotal = inst.reduce((a, b) => a + b.amount, 0);
   const instPaid = inst.filter((i) => i.paid).reduce((a, b) => a + b.amount, 0);
 
+  const openingBalance = hasPriorActivity(s, ref) ? monthSummary(s, previousMonth(ref)).balance : 0;
   const totalExpenses = variableTotal + fixedTotal + instTotal;
-  const totalPaid = variablePaid + instPaid; // fixed: assume não-pagos por padrão
-  const balance = incomesTotal - totalExpenses;
-  const available = incomesTotal - totalPaid;
+  const totalPaid = variablePaid + instPaid;
+  const monthResult = incomesTotal - totalExpenses;
+  const balance = openingBalance + monthResult;
+  const available = openingBalance + incomesTotal - totalPaid;
   const committed = incomesTotal > 0 ? (totalExpenses / incomesTotal) * 100 : 0;
 
   return {
+    openingBalance,
+    monthResult,
     incomesTotal,
     variableTotal,
     fixedTotal,
@@ -254,7 +174,6 @@ export function monthSummary(s: DataStore, ref: Date) {
   };
 }
 
-// próximos pagamentos (fixos + parcelas + variáveis pendentes)
 export interface UpcomingPayment {
   id: string;
   name: string;
@@ -267,6 +186,7 @@ export interface UpcomingPayment {
 export function upcomingPayments(s: DataStore, ref: Date, days = 30) {
   const now = new Date();
   const out: UpcomingPayment[] = [];
+  const limit = Math.max(1, days);
 
   s.fixed
     .filter((f) => f.active)
@@ -307,5 +227,5 @@ export function upcomingPayments(s: DataStore, ref: Date, days = 30) {
       });
     });
 
-  return out.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 50);
+  return out.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, limit);
 }

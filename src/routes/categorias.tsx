@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { store, useHydrate, useStore } from "@/lib/finance/store";
+import { useFinanceActions } from "@/lib/finance/actions";
+import { useHydrate, useStore } from "@/lib/finance/store";
 import type { CategoryKind } from "@/lib/finance/types";
 import { toast } from "sonner";
 
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/categorias")({
 function Page() {
   useHydrate();
   const data = useStore();
+  const actions = useFinanceActions();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -38,9 +40,9 @@ function Page() {
     color: "#10b981",
   });
 
-  function submit() {
+  async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
-    store.addCategory(form);
+    await actions.addCategory(form);
     toast.success("Categoria criada");
     setOpen(false);
     setForm({ name: "", kind: "expense", color: "#10b981" });
@@ -65,18 +67,11 @@ function Page() {
             className="flex items-center justify-between rounded-xl border bg-card p-3"
           >
             <div className="flex items-center gap-3">
-              <span
-                className="h-3 w-3 rounded-full"
-                style={{ backgroundColor: c.color }}
-              />
+              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: c.color }} />
               <div>
                 <p className="text-sm font-medium">{c.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {c.kind === "income"
-                    ? "Receita"
-                    : c.kind === "expense"
-                      ? "Despesa"
-                      : "Ambos"}
+                  {c.kind === "income" ? "Receita" : c.kind === "expense" ? "Despesa" : "Ambos"}
                   {c.custom && " · personalizada"}
                 </p>
               </div>
@@ -85,8 +80,8 @@ function Page() {
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => {
-                  store.removeCategory(c.id);
+                onClick={async () => {
+                  await actions.removeCategory(c.id);
                   toast.success("Removida");
                 }}
               >
@@ -115,9 +110,7 @@ function Page() {
                 <Label>Tipo</Label>
                 <Select
                   value={form.kind}
-                  onValueChange={(v) =>
-                    setForm({ ...form, kind: v as CategoryKind })
-                  }
+                  onValueChange={(v) => setForm({ ...form, kind: v as CategoryKind })}
                 >
                   <SelectTrigger>
                     <SelectValue />

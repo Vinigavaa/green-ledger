@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { CategorySelect } from "@/components/finance/CategorySelect";
-import { categoryById, store, useHydrate, useStore } from "@/lib/finance/store";
+import { useFinanceActions } from "@/lib/finance/actions";
+import { categoryById, useHydrate, useStore } from "@/lib/finance/store";
 import { brl, todayISO } from "@/lib/finance/format";
 import type { Installment } from "@/lib/finance/types";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ function emptyForm(): Omit<Installment, "id" | "paidIndices"> {
 function Page() {
   useHydrate();
   const data = useStore();
+  const actions = useFinanceActions();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
 
@@ -56,11 +58,11 @@ function Page() {
     return total;
   }, [data.installments]);
 
-  function submit() {
+  async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.totalAmount <= 0) return toast.error("Valor inválido");
     if (form.installments < 1) return toast.error("Parcelas inválidas");
-    store.addInstallment(form);
+    await actions.addInstallment(form);
     toast.success("Parcelamento adicionado");
     setOpen(false);
     setForm(emptyForm());
@@ -100,8 +102,8 @@ function Page() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => {
-                      store.removeInstallment(i.id);
+                    onClick={async () => {
+                      await actions.removeInstallment(i.id);
                       toast.success("Removido");
                     }}
                   >
@@ -133,7 +135,9 @@ function Page() {
                     return (
                       <button
                         key={idx}
-                        onClick={() => store.toggleInstallmentPaid(i.id, idx)}
+                        onClick={async () => {
+                          await actions.toggleInstallmentPaid(i.id, idx);
+                        }}
                         className={
                           "flex h-9 items-center justify-center rounded-md border text-xs font-medium transition-colors " +
                           (isPaid
@@ -174,9 +178,7 @@ function Page() {
                   type="number"
                   step="0.01"
                   value={form.totalAmount || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, totalAmount: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, totalAmount: Number(e.target.value) })}
                 />
               </div>
               <div className="grid gap-1.5">
@@ -185,9 +187,7 @@ function Page() {
                   type="number"
                   min={1}
                   value={form.installments}
-                  onChange={(e) =>
-                    setForm({ ...form, installments: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, installments: Number(e.target.value) })}
                 />
               </div>
             </div>
@@ -211,11 +211,7 @@ function Page() {
             <p className="text-xs text-muted-foreground">
               Valor por parcela:{" "}
               <span className="font-semibold text-foreground">
-                {brl(
-                  form.installments > 0
-                    ? form.totalAmount / form.installments
-                    : 0,
-                )}
+                {brl(form.installments > 0 ? form.totalAmount / form.installments : 0)}
               </span>
             </p>
           </div>

@@ -10,6 +10,8 @@ import {
 
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
+import { getFinanceData } from "@/lib/finance/functions";
+import { FinanceDataProvider } from "@/lib/finance/store";
 
 function NotFoundComponent() {
   return (
@@ -69,12 +71,17 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  loader: () => getFinanceData(),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "FinFlow — Organize suas finanças pessoais" },
-      { name: "description", content: "Controle receitas, gastos, parcelas, gastos fixos e objetivos financeiros em um painel minimalista." },
+      {
+        name: "description",
+        content:
+          "Controle receitas, gastos, parcelas, gastos fixos e objetivos financeiros em um painel minimalista.",
+      },
       { name: "author", content: "FinFlow" },
       { property: "og:title", content: "FinFlow — Finanças pessoais" },
       { property: "og:description", content: "Painel minimalista para suas finanças pessoais." },
@@ -111,10 +118,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const data = Route.useLoaderData();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <FinanceDataProvider data={data}>
+        <Outlet />
+      </FinanceDataProvider>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );

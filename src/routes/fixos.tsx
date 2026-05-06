@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CategorySelect } from "@/components/finance/CategorySelect";
-import { categoryById, store, useHydrate, useStore } from "@/lib/finance/store";
+import { useFinanceActions } from "@/lib/finance/actions";
+import { categoryById, useHydrate, useStore } from "@/lib/finance/store";
 import { brl } from "@/lib/finance/format";
 import type { FixedExpense } from "@/lib/finance/types";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ function emptyForm(): Omit<FixedExpense, "id"> {
 function Page() {
   useHydrate();
   const data = useStore();
+  const actions = useFinanceActions();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FixedExpense | null>(null);
   const [form, setForm] = useState(emptyForm());
@@ -56,15 +58,15 @@ function Page() {
     setForm({ ...f });
     setOpen(true);
   }
-  function submit() {
+  async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.amount <= 0) return toast.error("Valor inválido");
     if (form.dueDay < 1 || form.dueDay > 31) return toast.error("Dia inválido");
     if (editing) {
-      store.updateFixed(editing.id, form);
+      await actions.updateFixed(editing.id, form);
       toast.success("Gasto fixo atualizado");
     } else {
-      store.addFixed(form);
+      await actions.addFixed(form);
       toast.success("Gasto fixo adicionado");
     }
     setOpen(false);
@@ -104,15 +106,13 @@ function Page() {
                   </div>
                   <Switch
                     checked={f.active}
-                    onCheckedChange={(v) => store.updateFixed(f.id, { active: v })}
+                    onCheckedChange={async (v) => {
+                      await actions.updateFixed(f.id, { active: v });
+                    }}
                   />
                 </div>
-                <p className="mt-3 text-2xl font-semibold tracking-tight">
-                  {brl(f.amount)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Vencimento todo dia {f.dueDay}
-                </p>
+                <p className="mt-3 text-2xl font-semibold tracking-tight">{brl(f.amount)}</p>
+                <p className="text-xs text-muted-foreground">Vencimento todo dia {f.dueDay}</p>
                 <div className="mt-3 flex justify-end gap-1">
                   <Button size="icon" variant="ghost" onClick={() => openEdit(f)}>
                     <Pencil className="h-4 w-4" />
@@ -120,8 +120,8 @@ function Page() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => {
-                      store.removeFixed(f.id);
+                    onClick={async () => {
+                      await actions.removeFixed(f.id);
                       toast.success("Removido");
                     }}
                   >
@@ -137,9 +137,7 @@ function Page() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editing ? "Editar gasto fixo" : "Novo gasto fixo"}
-            </DialogTitle>
+            <DialogTitle>{editing ? "Editar gasto fixo" : "Novo gasto fixo"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-1.5">
@@ -157,9 +155,7 @@ function Page() {
                   type="number"
                   step="0.01"
                   value={form.amount || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, amount: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
                 />
               </div>
               <div className="grid gap-1.5">
@@ -169,9 +165,7 @@ function Page() {
                   min={1}
                   max={31}
                   value={form.dueDay}
-                  onChange={(e) =>
-                    setForm({ ...form, dueDay: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, dueDay: Number(e.target.value) })}
                 />
               </div>
             </div>
@@ -187,9 +181,7 @@ function Page() {
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Ativo</p>
-                <p className="text-xs text-muted-foreground">
-                  Inclui no planejamento mensal
-                </p>
+                <p className="text-xs text-muted-foreground">Inclui no planejamento mensal</p>
               </div>
               <Switch
                 checked={form.active}

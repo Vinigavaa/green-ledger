@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { monthSummary, store, useHydrate, useStore } from "@/lib/finance/store";
+import { useFinanceActions } from "@/lib/finance/actions";
+import { monthSummary, useHydrate, useStore } from "@/lib/finance/store";
 import { brl } from "@/lib/finance/format";
 import type { Goal, Priority } from "@/lib/finance/types";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ function emptyForm(): Omit<Goal, "id"> {
 function Page() {
   useHydrate();
   const data = useStore();
+  const actions = useFinanceActions();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [form, setForm] = useState(emptyForm());
@@ -53,14 +55,14 @@ function Page() {
     setForm({ ...g });
     setOpen(true);
   }
-  function submit() {
+  async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.target <= 0) return toast.error("Meta inválida");
     if (editing) {
-      store.updateGoal(editing.id, form);
+      await actions.updateGoal(editing.id, form);
       toast.success("Objetivo atualizado");
     } else {
-      store.addGoal(form);
+      await actions.addGoal(form);
       toast.success("Objetivo adicionado");
     }
     setOpen(false);
@@ -90,8 +92,7 @@ function Page() {
           {sorted.map((g) => {
             const remaining = Math.max(0, g.target - g.saved);
             const pct = Math.min(100, (g.saved / g.target) * 100);
-            const months =
-              monthlyAvailable > 0 ? Math.ceil(remaining / monthlyAvailable) : null;
+            const months = monthlyAvailable > 0 ? Math.ceil(remaining / monthlyAvailable) : null;
             return (
               <div key={g.id} className="rounded-2xl border bg-card p-5 shadow-sm">
                 <div className="flex items-start justify-between">
@@ -99,11 +100,7 @@ function Page() {
                     <p className="font-semibold">{g.name}</p>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                       Prioridade{" "}
-                      {g.priority === "high"
-                        ? "alta"
-                        : g.priority === "medium"
-                          ? "média"
-                          : "baixa"}
+                      {g.priority === "high" ? "alta" : g.priority === "medium" ? "média" : "baixa"}
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -113,8 +110,8 @@ function Page() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => {
-                        store.removeGoal(g.id);
+                      onClick={async () => {
+                        await actions.removeGoal(g.id);
                         toast.success("Removido");
                       }}
                     >
@@ -143,9 +140,7 @@ function Page() {
                   </div>
                   <div className="rounded-lg bg-muted p-2">
                     <p className="text-muted-foreground">Tempo</p>
-                    <p className="font-semibold">
-                      {months !== null ? `${months} m` : "—"}
-                    </p>
+                    <p className="font-semibold">{months !== null ? `${months} m` : "—"}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
@@ -157,9 +152,10 @@ function Page() {
                       if (e.key === "Enter") {
                         const v = Number((e.target as HTMLInputElement).value);
                         if (v > 0) {
-                          store.updateGoal(g.id, { saved: g.saved + v });
-                          (e.target as HTMLInputElement).value = "";
-                          toast.success("Valor guardado");
+                          void actions.updateGoal(g.id, { saved: g.saved + v }).then(() => {
+                            (e.target as HTMLInputElement).value = "";
+                            toast.success("Valor guardado");
+                          });
                         }
                       }
                     }}
@@ -168,12 +164,13 @@ function Page() {
                     variant="secondary"
                     size="sm"
                     onClick={(e) => {
-                      const input = (e.currentTarget.previousSibling as HTMLInputElement);
+                      const input = e.currentTarget.previousSibling as HTMLInputElement;
                       const v = Number(input?.value ?? 0);
                       if (v > 0) {
-                        store.updateGoal(g.id, { saved: g.saved + v });
-                        input.value = "";
-                        toast.success("Valor guardado");
+                        void actions.updateGoal(g.id, { saved: g.saved + v }).then(() => {
+                          input.value = "";
+                          toast.success("Valor guardado");
+                        });
                       }
                     }}
                   >
@@ -207,9 +204,7 @@ function Page() {
                   type="number"
                   step="0.01"
                   value={form.target || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, target: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, target: Number(e.target.value) })}
                 />
               </div>
               <div className="grid gap-1.5">
@@ -218,9 +213,7 @@ function Page() {
                   type="number"
                   step="0.01"
                   value={form.saved || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, saved: Number(e.target.value) })
-                  }
+                  onChange={(e) => setForm({ ...form, saved: Number(e.target.value) })}
                 />
               </div>
             </div>
@@ -230,18 +223,14 @@ function Page() {
                 <Input
                   type="date"
                   value={form.deadline ?? ""}
-                  onChange={(e) =>
-                    setForm({ ...form, deadline: e.target.value || undefined })
-                  }
+                  onChange={(e) => setForm({ ...form, deadline: e.target.value || undefined })}
                 />
               </div>
               <div className="grid gap-1.5">
                 <Label>Prioridade</Label>
                 <Select
                   value={form.priority}
-                  onValueChange={(v) =>
-                    setForm({ ...form, priority: v as Priority })
-                  }
+                  onValueChange={(v) => setForm({ ...form, priority: v as Priority })}
                 >
                   <SelectTrigger>
                     <SelectValue />

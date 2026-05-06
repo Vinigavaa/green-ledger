@@ -28,6 +28,7 @@ export interface Income {
   date: string; // ISO
   categoryId: UUID;
   recurring: boolean;
+  received: boolean;
   notes?: string;
 }
 
