@@ -13,13 +13,7 @@ export interface Category {
 }
 
 export type PaymentStatus = "paid" | "pending" | "late";
-export type PaymentMethod =
-  | "Dinheiro"
-  | "Pix"
-  | "Débito"
-  | "Crédito"
-  | "Boleto"
-  | "Transferência";
+export type PaymentMethod = "Dinheiro" | "Pix" | "Débito" | "Crédito" | "Boleto" | "Transferência";
 
 export interface Income {
   id: UUID;
@@ -48,6 +42,7 @@ export interface FixedExpense {
   name: string;
   amount: number;
   dueDay: number; // 1-31
+  startDate: string;
   categoryId: UUID;
   active: boolean;
 }

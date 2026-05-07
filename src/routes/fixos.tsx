@@ -16,8 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CategorySelect } from "@/components/finance/CategorySelect";
 import { useFinanceActions } from "@/lib/finance/actions";
-import { categoryById, useHydrate, useStore } from "@/lib/finance/store";
-import { brl } from "@/lib/finance/format";
+import { categoryById, fixedExpensesInMonth, useHydrate, useStore } from "@/lib/finance/store";
+import { brl, formatDateBR, todayISO } from "@/lib/finance/format";
 import type { FixedExpense } from "@/lib/finance/types";
 import { toast } from "sonner";
 
@@ -30,6 +30,7 @@ function emptyForm(): Omit<FixedExpense, "id"> {
     name: "",
     amount: 0,
     dueDay: 5,
+    startDate: todayISO(),
     categoryId: "cat-moradia",
     active: true,
   };
@@ -44,8 +45,8 @@ function Page() {
   const [form, setForm] = useState(emptyForm());
 
   const total = useMemo(
-    () => data.fixed.filter((f) => f.active).reduce((a, b) => a + b.amount, 0),
-    [data.fixed],
+    () => fixedExpensesInMonth(data, new Date()).reduce((a, b) => a + b.amount, 0),
+    [data],
   );
 
   function openNew() {
@@ -53,15 +54,19 @@ function Page() {
     setForm(emptyForm());
     setOpen(true);
   }
+
   function openEdit(f: FixedExpense) {
     setEditing(f);
     setForm({ ...f });
     setOpen(true);
   }
+
   async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.amount <= 0) return toast.error("Valor inválido");
     if (form.dueDay < 1 || form.dueDay > 31) return toast.error("Dia inválido");
+    if (!form.startDate) return toast.error("Informe a data de início");
+
     if (editing) {
       await actions.updateFixed(editing.id, form);
       toast.success("Gasto fixo atualizado");
@@ -69,6 +74,7 @@ function Page() {
       await actions.addFixed(form);
       toast.success("Gasto fixo adicionado");
     }
+
     setOpen(false);
   }
 
@@ -113,6 +119,9 @@ function Page() {
                 </div>
                 <p className="mt-3 text-2xl font-semibold tracking-tight">{brl(f.amount)}</p>
                 <p className="text-xs text-muted-foreground">Vencimento todo dia {f.dueDay}</p>
+                <p className="text-xs text-muted-foreground">
+                  Início em {formatDateBR(f.startDate)}
+                </p>
                 <div className="mt-3 flex justify-end gap-1">
                   <Button size="icon" variant="ghost" onClick={() => openEdit(f)}>
                     <Pencil className="h-4 w-4" />
@@ -148,7 +157,7 @@ function Page() {
                 placeholder="Ex: Aluguel"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="grid gap-1.5">
                 <Label>Valor (R$)</Label>
                 <Input
@@ -166,6 +175,14 @@ function Page() {
                   max={31}
                   value={form.dueDay}
                   onChange={(e) => setForm({ ...form, dueDay: Number(e.target.value) })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Data de início</Label>
+                <Input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => setForm({ ...form, startDate: e.target.value })}
                 />
               </div>
             </div>

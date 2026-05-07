@@ -1,6 +1,6 @@
 import { createContext, createElement, useContext } from "react";
 import type { ReactNode } from "react";
-import type { Category, DataStore, Income, Installment } from "./types";
+import type { Category, DataStore, FixedExpense, Income, Installment } from "./types";
 import { sameMonth } from "./format";
 
 const FinanceDataContext = createContext<DataStore | null>(null);
@@ -32,6 +32,17 @@ export interface MaterializedIncome extends Income {
 
 function monthKey(date: Date) {
   return date.getFullYear() * 12 + date.getMonth();
+}
+
+function startsOnOrBeforeMonth(sourceDate: string, ref: Date) {
+  const start = new Date(sourceDate);
+  if (Number.isNaN(start.getTime())) return true;
+  return monthKey(start) <= monthKey(ref);
+}
+
+function dueDateForMonth(expense: FixedExpense, ref: Date) {
+  const lastDayOfMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
+  return new Date(ref.getFullYear(), ref.getMonth(), Math.min(expense.dueDay, lastDayOfMonth));
 }
 
 function projectedRecurringDate(sourceDate: string, ref: Date) {
@@ -117,11 +128,18 @@ export function installmentsInMonth(s: DataStore, ref: Date) {
   return out;
 }
 
+export function fixedExpensesInMonth(s: DataStore, ref: Date) {
+  return s.fixed.filter(
+    (expense) => expense.active && startsOnOrBeforeMonth(expense.startDate, ref),
+  );
+}
+
 function hasPriorActivity(s: DataStore, ref: Date) {
   const refKey = monthKey(ref);
   return (
     s.incomes.some((income) => monthKey(new Date(income.date)) < refKey) ||
     s.expenses.some((expense) => monthKey(new Date(expense.date)) < refKey) ||
+    s.fixed.some((expense) => expense.active && monthKey(new Date(expense.startDate)) < refKey) ||
     s.installments.some((installment) => monthKey(new Date(installment.firstDate)) < refKey)
   );
 }
@@ -140,7 +158,7 @@ export function monthSummary(s: DataStore, ref: Date) {
     .filter((e) => e.status === "paid")
     .reduce((a, b) => a + b.amount, 0);
 
-  const fixedActive = s.fixed.filter((f) => f.active);
+  const fixedActive = fixedExpensesInMonth(s, ref);
   const fixedTotal = fixedActive.reduce((a, b) => a + b.amount, 0);
 
   const inst = installmentsInMonth(s, ref);
@@ -189,9 +207,9 @@ export function upcomingPayments(s: DataStore, ref: Date, days = 30) {
   const limit = Math.max(1, days);
 
   s.fixed
-    .filter((f) => f.active)
+    .filter((f) => f.active && startsOnOrBeforeMonth(f.startDate, ref))
     .forEach((f) => {
-      const d = new Date(ref.getFullYear(), ref.getMonth(), Math.min(f.dueDay, 28));
+      const d = dueDateForMonth(f, ref);
       out.push({
         id: f.id,
         name: f.name,

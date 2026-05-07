@@ -55,8 +55,8 @@ function Page() {
   const [form, setForm] = useState(emptyForm());
 
   const filtered = useMemo(() => {
-    return incomesInMonth(data, month).filter((i) =>
-      i.name.toLowerCase().includes(query.toLowerCase()),
+    return incomesInMonth(data, month).filter((income) =>
+      income.name.toLowerCase().includes(query.toLowerCase()),
     );
   }, [data, month, query]);
 
@@ -67,14 +67,17 @@ function Page() {
     setForm(emptyForm());
     setOpen(true);
   }
-  function openEdit(i: Income) {
-    setEditing(i);
-    setForm({ ...i });
+
+  function openEdit(income: Income) {
+    setEditing(income);
+    setForm({ ...income });
     setOpen(true);
   }
+
   async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.amount <= 0) return toast.error("Valor deve ser maior que zero");
+
     if (editing) {
       await actions.updateIncome(editing.id, form);
       toast.success("Receita atualizada");
@@ -82,6 +85,7 @@ function Page() {
       await actions.addIncome(form);
       toast.success("Receita adicionada");
     }
+
     setOpen(false);
   }
 
@@ -124,35 +128,35 @@ function Page() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filtered.map((i) => {
-                const c = categoryById(data, i.categoryId);
+              {filtered.map((income) => {
+                const category = categoryById(data, income.categoryId);
                 return (
-                  <tr key={i.id} className="hover:bg-accent/40">
+                  <tr key={income.id} className="hover:bg-accent/40">
                     <td className="px-4 py-3 font-medium">
-                      {i.name}
-                      {i.recurring && (
+                      {income.name}
+                      {income.recurring && (
                         <span className="ml-2 rounded-md bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
                           Recorrente
                         </span>
                       )}
-                      {i.projected && (
+                      {income.projected && (
                         <span className="ml-2 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                           Projetada
                         </span>
                       )}
                     </td>
                     <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
-                      {c?.name ?? "—"}
+                      {category?.name ?? "-"}
                     </td>
                     <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
-                      {formatDateBR(i.date)}
+                      {formatDateBR(income.date)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-center">
                         <Switch
-                          checked={i.received}
+                          checked={income.received}
                           onCheckedChange={async (checked) => {
-                            await actions.setIncomeReceived(i as MaterializedIncome, checked);
+                            await actions.setIncomeReceived(income as MaterializedIncome, checked);
                             toast.success(
                               checked ? "Receita marcada como recebida" : "Receita desmarcada",
                             );
@@ -161,24 +165,24 @@ function Page() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-success">
-                      {brl(i.amount)}
+                      {brl(income.amount)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
-                          disabled={Boolean(i.projected)}
-                          onClick={() => openEdit(i)}
+                          disabled={Boolean(income.projected)}
+                          onClick={() => openEdit(income)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          disabled={Boolean(i.projected)}
+                          disabled={Boolean(income.projected)}
                           onClick={async () => {
-                            await actions.removeIncome(i.id);
+                            await actions.removeIncome(income.id);
                             toast.success("Receita removida");
                           }}
                         >
@@ -222,7 +226,7 @@ function Page() {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label>Data</Label>
+                <Label>{form.recurring ? "Data de início" : "Data"}</Label>
                 <Input
                   type="date"
                   value={form.date}
@@ -235,30 +239,32 @@ function Page() {
               <CategorySelect
                 categories={data.categories}
                 value={form.categoryId}
-                onChange={(v) => setForm({ ...form, categoryId: v })}
+                onChange={(value) => setForm({ ...form, categoryId: value })}
                 filter="income"
               />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Receita recorrente</p>
-                <p className="text-xs text-muted-foreground">Marque se acontece todo mês</p>
+                <p className="text-xs text-muted-foreground">
+                  Usa a data acima como primeira ocorrência e não conta meses anteriores
+                </p>
               </div>
               <Switch
                 checked={form.recurring}
-                onCheckedChange={(v) => setForm({ ...form, recurring: v })}
+                onCheckedChange={(value) => setForm({ ...form, recurring: value })}
               />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Receita recebida</p>
                 <p className="text-xs text-muted-foreground">
-                  Somente receitas recebidas entram nos cÃ¡lculos
+                  Somente receitas recebidas entram nos cálculos
                 </p>
               </div>
               <Switch
                 checked={form.received}
-                onCheckedChange={(v) => setForm({ ...form, received: v })}
+                onCheckedChange={(value) => setForm({ ...form, received: value })}
               />
             </div>
           </div>

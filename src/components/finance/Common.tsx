@@ -14,9 +14,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-        {subtitle && (
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-        )}
+        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -29,12 +27,16 @@ export function StatCard({
   hint,
   tone = "default",
   icon,
+  onIconClick,
+  iconLabel,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: "default" | "success" | "danger" | "warning" | "primary";
   icon?: ReactNode;
+  onIconClick?: () => void;
+  iconLabel?: string;
 }) {
   const toneClass = {
     default: "bg-card",
@@ -67,22 +69,36 @@ export function StatCard({
         >
           {label}
         </p>
-        {icon && (
-          <div
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-lg",
-              tone === "primary"
-                ? "bg-white/15 text-primary-foreground"
-                : "bg-accent text-accent-foreground",
-            )}
-          >
-            {icon}
-          </div>
-        )}
+        {icon &&
+          (onIconClick ? (
+            <button
+              type="button"
+              aria-label={iconLabel ?? `Ver detalhes de ${label}`}
+              title={iconLabel ?? `Ver detalhes de ${label}`}
+              onClick={onIconClick}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                tone === "primary"
+                  ? "bg-white/15 text-primary-foreground hover:bg-white/25"
+                  : "bg-accent text-accent-foreground hover:bg-accent/80",
+              )}
+            >
+              {icon}
+            </button>
+          ) : (
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-lg",
+                tone === "primary"
+                  ? "bg-white/15 text-primary-foreground"
+                  : "bg-accent text-accent-foreground",
+              )}
+            >
+              {icon}
+            </div>
+          ))}
       </div>
-      <p className={cn("mt-3 text-2xl font-semibold tracking-tight", valueClass)}>
-        {value}
-      </p>
+      <p className={cn("mt-3 text-2xl font-semibold tracking-tight", valueClass)}>{value}</p>
       {hint && (
         <p
           className={cn(
@@ -110,9 +126,7 @@ export function EmptyState({
     <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
       <h3 className="text-base font-semibold">{title}</h3>
       {description && (
-        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-          {description}
-        </p>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
       )}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>

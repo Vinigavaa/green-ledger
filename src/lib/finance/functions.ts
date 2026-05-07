@@ -98,6 +98,7 @@ async function readDataStore(): Promise<DataStore> {
       name: item.name,
       amount: toNumber(item.amount),
       dueDay: item.dueDay,
+      startDate: formatDate(item.startDate ?? item.createdAt),
       categoryId: item.categoryId,
       active: item.active,
     })),
@@ -145,6 +146,7 @@ const fixedExpenseSchema = z.object({
   name: z.string().trim().min(1),
   amount: z.number().positive(),
   dueDay: z.number().int().min(1).max(31),
+  startDate: z.string().min(1),
   categoryId: z.string().min(1),
   active: z.boolean(),
 });
@@ -249,15 +251,25 @@ export const deleteExpense = createServerFn({ method: "POST" })
 export const createFixedExpense = createServerFn({ method: "POST" })
   .inputValidator(fixedExpenseSchema)
   .handler(async ({ data }) => {
-    await prisma.fixedExpense.create({ data });
+    await prisma.fixedExpense.create({
+      data: {
+        ...data,
+        startDate: parseDate(data.startDate),
+      },
+    });
   });
 
 export const updateFixedExpense = createServerFn({ method: "POST" })
   .inputValidator(idSchema.extend({ patch: fixedExpenseSchema.partial() }))
   .handler(async ({ data }) => {
+    const patch: Record<string, unknown> = { ...data.patch };
+    if (typeof data.patch.startDate === "string") {
+      patch.startDate = parseDate(data.patch.startDate);
+    }
+
     await prisma.fixedExpense.update({
       where: { id: data.id },
-      data: data.patch,
+      data: patch,
     });
   });
 

@@ -81,6 +81,7 @@ model FixedExpense {
   name       String
   amount     Decimal  @db.Decimal(14, 2)
   dueDay     Int
+  startDate  DateTime? @db.Date
   active     Boolean  @default(true)
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)

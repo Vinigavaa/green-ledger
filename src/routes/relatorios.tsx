@@ -15,7 +15,13 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/finance/AppShell";
 import { PageHeader } from "@/components/finance/Common";
-import { categoryById, monthSummary, useHydrate, useStore } from "@/lib/finance/store";
+import {
+  categoryById,
+  fixedExpensesInMonth,
+  monthSummary,
+  useHydrate,
+  useStore,
+} from "@/lib/finance/store";
 import { brl } from "@/lib/finance/format";
 
 export const Route = createFileRoute("/relatorios")({
@@ -25,20 +31,18 @@ export const Route = createFileRoute("/relatorios")({
 function Page() {
   useHydrate();
   const data = useStore();
-  const ref = new Date();
+  const ref = useMemo(() => new Date(), []);
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
     data.expenses
       .filter((e) => e.date.startsWith(ref.toISOString().slice(0, 7)))
-      .forEach((e) =>
-        map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + e.amount),
-      );
+      .forEach((e) => map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + e.amount));
     return Array.from(map.entries()).map(([id, value]) => {
       const c = categoryById(data, id);
       return { name: c?.name ?? "—", color: c?.color ?? "#10b981", value };
     });
-  }, [data]);
+  }, [data, ref]);
 
   const monthly = useMemo(() => {
     const arr = [];
@@ -53,11 +57,11 @@ function Page() {
       });
     }
     return arr;
-  }, [data]);
+  }, [data, ref]);
 
   const fixedRanking = useMemo(
-    () => [...data.fixed].filter((f) => f.active).sort((a, b) => b.amount - a.amount),
-    [data.fixed],
+    () => [...fixedExpensesInMonth(data, ref)].sort((a, b) => b.amount - a.amount),
+    [data, ref],
   );
 
   return (
@@ -124,8 +128,18 @@ function Page() {
                 <YAxis stroke="oklch(0.52 0.02 155)" fontSize={12} />
                 <Tooltip formatter={(v: number) => brl(v)} />
                 <Legend />
-                <Line type="monotone" dataKey="Receitas" stroke="oklch(0.62 0.16 152)" strokeWidth={2} />
-                <Line type="monotone" dataKey="Despesas" stroke="oklch(0.60 0.22 27)" strokeWidth={2} />
+                <Line
+                  type="monotone"
+                  dataKey="Receitas"
+                  stroke="oklch(0.62 0.16 152)"
+                  strokeWidth={2}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Despesas"
+                  stroke="oklch(0.60 0.22 27)"
+                  strokeWidth={2}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
