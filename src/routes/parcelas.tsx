@@ -17,9 +17,10 @@ import { Progress } from "@/components/ui/progress";
 import { CategorySelect } from "@/components/finance/CategorySelect";
 import { useFinanceActions } from "@/lib/finance/actions";
 import { categoryById, useHydrate, useStore } from "@/lib/finance/store";
-import { brl, todayISO } from "@/lib/finance/format";
+import { brl, parseISODate, todayISO } from "@/lib/finance/format";
 import type { Installment } from "@/lib/finance/types";
 import { toast } from "sonner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 export const Route = createFileRoute("/parcelas")({
   component: Page,
@@ -41,12 +42,13 @@ function Page() {
   const actions = useFinanceActions();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  const { isBusy, busyLabel, runBusy } = useBusyAction();
 
   const monthImpact = useMemo(() => {
     const ref = new Date();
     let total = 0;
     data.installments.forEach((i) => {
-      const start = new Date(i.firstDate);
+      const start = parseISODate(i.firstDate);
       const value = i.totalAmount / i.installments;
       for (let k = 0; k < i.installments; k++) {
         const d = new Date(start.getFullYear(), start.getMonth() + k, start.getDate());
@@ -60,21 +62,23 @@ function Page() {
 
   async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
-    if (form.totalAmount <= 0) return toast.error("Valor inválido");
-    if (form.installments < 1) return toast.error("Parcelas inválidas");
-    await actions.addInstallment(form);
-    toast.success("Parcelamento adicionado");
-    setOpen(false);
-    setForm(emptyForm());
+    if (form.totalAmount <= 0) return toast.error("Valor invÃ¡lido");
+    if (form.installments < 1) return toast.error("Parcelas invÃ¡lidas");
+    await runBusy(async () => {
+      await actions.addInstallment(form);
+      toast.success("Parcelamento adicionado");
+      setOpen(false);
+      setForm(emptyForm());
+    }, "Adicionando parcelamento...");
   }
 
   return (
-    <AppShell>
+    <AppShell busy={isBusy} busyLabel={busyLabel}>
       <PageHeader
         title="Parcelas"
         subtitle={`Impacto mensal estimado: ${brl(monthImpact)}`}
         actions={
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={() => setOpen(true)} disabled={isBusy}>
             <Plus className="mr-1 h-4 w-4" /> Nova compra parcelada
           </Button>
         }
@@ -102,9 +106,12 @@ function Page() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    disabled={isBusy}
                     onClick={async () => {
-                      await actions.removeInstallment(i.id);
-                      toast.success("Removido");
+                      await runBusy(async () => {
+                        await actions.removeInstallment(i.id);
+                        toast.success("Removido");
+                      }, "Removendo parcelamento...");
                     }}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -135,11 +142,14 @@ function Page() {
                     return (
                       <button
                         key={idx}
+                        disabled={isBusy}
                         onClick={async () => {
-                          await actions.toggleInstallmentPaid(i.id, idx);
+                          await runBusy(async () => {
+                            await actions.toggleInstallmentPaid(i.id, idx);
+                          }, "Atualizando parcela...");
                         }}
                         className={
-                          "flex h-9 items-center justify-center rounded-md border text-xs font-medium transition-colors " +
+                          "flex h-9 items-center justify-center rounded-md border text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 " +
                           (isPaid
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-background hover:bg-accent")
@@ -157,7 +167,12 @@ function Page() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!isBusy) setOpen(next);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nova compra parcelada</DialogTitle>
@@ -216,10 +231,12 @@ function Page() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>
               Cancelar
             </Button>
-            <Button onClick={submit}>Adicionar</Button>
+            <Button onClick={submit} disabled={isBusy}>
+              {isBusy ? "Salvando..." : "Adicionar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

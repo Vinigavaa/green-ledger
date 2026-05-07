@@ -10,6 +10,7 @@ import {
   PieChart,
   Tags,
   Wallet,
+  Loader2,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -26,10 +27,30 @@ const nav = [
   { to: "/categorias", label: "Categorias", icon: Tags },
 ] as const;
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  busy = false,
+  busyLabel = "Processando...",
+}: {
+  children: ReactNode;
+  busy?: boolean;
+  busyLabel?: string;
+}) {
   const loc = useLocation();
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {busy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 backdrop-blur-sm">
+          <div className="flex min-w-[220px] items-center gap-3 rounded-2xl border bg-card px-5 py-4 shadow-xl">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <div>
+              <p className="text-sm font-semibold">Aguarde</p>
+              <p className="text-xs text-muted-foreground">{busyLabel}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar - desktop */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
         <div className="flex items-center gap-2 px-6 py-5">

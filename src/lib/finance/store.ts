@@ -1,7 +1,7 @@
 import { createContext, createElement, useContext } from "react";
 import type { ReactNode } from "react";
 import type { Category, DataStore, FixedExpense, Income, Installment } from "./types";
-import { sameMonth } from "./format";
+import { parseISODate, sameMonth } from "./format";
 
 const FinanceDataContext = createContext<DataStore | null>(null);
 
@@ -35,7 +35,7 @@ function monthKey(date: Date) {
 }
 
 function startsOnOrBeforeMonth(sourceDate: string, ref: Date) {
-  const start = new Date(sourceDate);
+  const start = parseISODate(sourceDate);
   if (Number.isNaN(start.getTime())) return true;
   return monthKey(start) <= monthKey(ref);
 }
@@ -46,7 +46,7 @@ function dueDateForMonth(expense: FixedExpense, ref: Date) {
 }
 
 function projectedRecurringDate(sourceDate: string, ref: Date) {
-  const start = new Date(sourceDate);
+  const start = parseISODate(sourceDate);
   const lastDayOfMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
   const day = Math.min(start.getDate(), lastDayOfMonth);
   return new Date(ref.getFullYear(), ref.getMonth(), day);
@@ -63,7 +63,7 @@ function isMaterializedRecurringIncome(
     income.name === source.name &&
     income.categoryId === source.categoryId &&
     income.amount === source.amount &&
-    new Date(income.date).getDate() === projectedDate.getDate()
+    parseISODate(income.date).getDate() === projectedDate.getDate()
   );
 }
 
@@ -73,7 +73,7 @@ export function incomesInMonth(s: DataStore, ref: Date): MaterializedIncome[] {
   const projected = s.incomes
     .filter((income) => {
       if (!income.recurring) return false;
-      const start = new Date(income.date);
+      const start = parseISODate(income.date);
       return monthKey(start) < refKey;
     })
     .map((income) => {
@@ -110,7 +110,7 @@ export function installmentsInMonth(s: DataStore, ref: Date) {
     paid: boolean;
   }> = [];
   for (const inst of s.installments) {
-    const start = new Date(inst.firstDate);
+    const start = parseISODate(inst.firstDate);
     const amount = inst.totalAmount / inst.installments;
     for (let i = 0; i < inst.installments; i++) {
       const d = new Date(start.getFullYear(), start.getMonth() + i, start.getDate());
@@ -137,10 +137,12 @@ export function fixedExpensesInMonth(s: DataStore, ref: Date) {
 function hasPriorActivity(s: DataStore, ref: Date) {
   const refKey = monthKey(ref);
   return (
-    s.incomes.some((income) => monthKey(new Date(income.date)) < refKey) ||
-    s.expenses.some((expense) => monthKey(new Date(expense.date)) < refKey) ||
-    s.fixed.some((expense) => expense.active && monthKey(new Date(expense.startDate)) < refKey) ||
-    s.installments.some((installment) => monthKey(new Date(installment.firstDate)) < refKey)
+    s.incomes.some((income) => monthKey(parseISODate(income.date)) < refKey) ||
+    s.expenses.some((expense) => monthKey(parseISODate(expense.date)) < refKey) ||
+    s.fixed.some(
+      (expense) => expense.active && monthKey(parseISODate(expense.startDate)) < refKey,
+    ) ||
+    s.installments.some((installment) => monthKey(parseISODate(installment.firstDate)) < refKey)
   );
 }
 
@@ -234,7 +236,7 @@ export function upcomingPayments(s: DataStore, ref: Date, days = 30) {
   s.expenses
     .filter((e) => sameMonth(e.date, ref) && e.status !== "paid")
     .forEach((e) => {
-      const d = new Date(e.date);
+      const d = parseISODate(e.date);
       out.push({
         id: e.id,
         name: e.name,

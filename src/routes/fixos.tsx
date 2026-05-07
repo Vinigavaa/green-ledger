@@ -20,6 +20,7 @@ import { categoryById, fixedExpensesInMonth, useHydrate, useStore } from "@/lib/
 import { brl, formatDateBR, todayISO } from "@/lib/finance/format";
 import type { FixedExpense } from "@/lib/finance/types";
 import { toast } from "sonner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 export const Route = createFileRoute("/fixos")({
   component: Page,
@@ -43,6 +44,7 @@ function Page() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FixedExpense | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const { isBusy, busyLabel, runBusy } = useBusyAction();
 
   const total = useMemo(
     () => fixedExpensesInMonth(data, new Date()).reduce((a, b) => a + b.amount, 0),
@@ -67,24 +69,29 @@ function Page() {
     if (form.dueDay < 1 || form.dueDay > 31) return toast.error("Dia inválido");
     if (!form.startDate) return toast.error("Informe a data de início");
 
-    if (editing) {
-      await actions.updateFixed(editing.id, form);
-      toast.success("Gasto fixo atualizado");
-    } else {
-      await actions.addFixed(form);
-      toast.success("Gasto fixo adicionado");
-    }
+    await runBusy(
+      async () => {
+        if (editing) {
+          await actions.updateFixed(editing.id, form);
+          toast.success("Gasto fixo atualizado");
+        } else {
+          await actions.addFixed(form);
+          toast.success("Gasto fixo adicionado");
+        }
 
-    setOpen(false);
+        setOpen(false);
+      },
+      editing ? "Salvando gasto fixo..." : "Adicionando gasto fixo...",
+    );
   }
 
   return (
-    <AppShell>
+    <AppShell busy={isBusy} busyLabel={busyLabel}>
       <PageHeader
         title="Gastos fixos"
         subtitle={`Compromissos mensais ativos: ${brl(total)}`}
         actions={
-          <Button onClick={openNew}>
+          <Button onClick={openNew} disabled={isBusy}>
             <Plus className="mr-1 h-4 w-4" /> Novo fixo
           </Button>
         }
@@ -94,7 +101,11 @@ function Page() {
         <EmptyState
           title="Nenhum gasto fixo"
           description="Cadastre aluguel, internet, assinaturas..."
-          action={<Button onClick={openNew}>Adicionar gasto fixo</Button>}
+          action={
+            <Button onClick={openNew} disabled={isBusy}>
+              Adicionar gasto fixo
+            </Button>
+          }
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -112,8 +123,11 @@ function Page() {
                   </div>
                   <Switch
                     checked={f.active}
+                    disabled={isBusy}
                     onCheckedChange={async (v) => {
-                      await actions.updateFixed(f.id, { active: v });
+                      await runBusy(async () => {
+                        await actions.updateFixed(f.id, { active: v });
+                      }, "Atualizando gasto fixo...");
                     }}
                   />
                 </div>
@@ -123,15 +137,18 @@ function Page() {
                   Início em {formatDateBR(f.startDate)}
                 </p>
                 <div className="mt-3 flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(f)}>
+                  <Button size="icon" variant="ghost" onClick={() => openEdit(f)} disabled={isBusy}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
+                    disabled={isBusy}
                     onClick={async () => {
-                      await actions.removeFixed(f.id);
-                      toast.success("Removido");
+                      await runBusy(async () => {
+                        await actions.removeFixed(f.id);
+                        toast.success("Removido");
+                      }, "Removendo gasto fixo...");
                     }}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -143,7 +160,12 @@ function Page() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!isBusy) setOpen(next);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Editar gasto fixo" : "Novo gasto fixo"}</DialogTitle>
@@ -207,10 +229,12 @@ function Page() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>
               Cancelar
             </Button>
-            <Button onClick={submit}>{editing ? "Salvar" : "Adicionar"}</Button>
+            <Button onClick={submit} disabled={isBusy}>
+              {isBusy ? "Salvando..." : editing ? "Salvar" : "Adicionar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

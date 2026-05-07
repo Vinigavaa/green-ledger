@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { brl, formatDateBR, monthLabel } from "@/lib/finance/format";
+import { brl, formatDateBR, monthLabel, parseISODate } from "@/lib/finance/format";
 import {
   incomesInMonth,
   monthSummary,
@@ -65,7 +65,7 @@ function monthKey(date: Date) {
 }
 
 function startsAfterMonth(iso: string, ref: Date) {
-  const date = new Date(iso);
+  const date = parseISODate(iso);
   if (Number.isNaN(date.getTime())) return false;
   return monthKey(date) > monthKey(ref);
 }

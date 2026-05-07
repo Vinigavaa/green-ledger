@@ -29,6 +29,7 @@ import { categoryById, useHydrate, useStore } from "@/lib/finance/store";
 import { brl, formatDateBR, sameMonth, todayISO } from "@/lib/finance/format";
 import type { Expense, PaymentMethod, PaymentStatus } from "@/lib/finance/types";
 import { toast } from "sonner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 export const Route = createFileRoute("/gastos")({
   component: Page,
@@ -69,6 +70,7 @@ function Page() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const { isBusy, busyLabel, runBusy } = useBusyAction();
 
   const filtered = useMemo(
     () =>
@@ -92,25 +94,30 @@ function Page() {
   async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.amount <= 0) return toast.error("Valor deve ser maior que zero");
-    if (editing) {
-      await actions.updateExpense(editing.id, form);
-      toast.success("Gasto atualizado");
-    } else {
-      await actions.addExpense(form);
-      toast.success("Gasto adicionado");
-    }
-    setOpen(false);
+    await runBusy(
+      async () => {
+        if (editing) {
+          await actions.updateExpense(editing.id, form);
+          toast.success("Gasto atualizado");
+        } else {
+          await actions.addExpense(form);
+          toast.success("Gasto adicionado");
+        }
+        setOpen(false);
+      },
+      editing ? "Salvando gasto..." : "Adicionando gasto...",
+    );
   }
 
   return (
-    <AppShell>
+    <AppShell busy={isBusy} busyLabel={busyLabel}>
       <PageHeader
         title="Gastos"
         subtitle={`Total no mês: ${brl(total)}`}
         actions={
           <>
             <MonthSwitcher value={month} onChange={setMonth} />
-            <Button onClick={openNew}>
+            <Button onClick={openNew} disabled={isBusy}>
               <Plus className="mr-1 h-4 w-4" /> Novo gasto
             </Button>
           </>
@@ -125,7 +132,11 @@ function Page() {
         <EmptyState
           title="Nenhum gasto"
           description="Cadastre seu primeiro gasto do mês"
-          action={<Button onClick={openNew}>Adicionar gasto</Button>}
+          action={
+            <Button onClick={openNew} disabled={isBusy}>
+              Adicionar gasto
+            </Button>
+          }
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border bg-card">
@@ -173,15 +184,23 @@ function Page() {
                     <td className="px-4 py-3 text-right font-semibold">{brl(e.amount)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(e)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => openEdit(e)}
+                          disabled={isBusy}
+                        >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
+                          disabled={isBusy}
                           onClick={async () => {
-                            await actions.removeExpense(e.id);
-                            toast.success("Gasto removido");
+                            await runBusy(async () => {
+                              await actions.removeExpense(e.id);
+                              toast.success("Gasto removido");
+                            }, "Removendo gasto...");
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -196,7 +215,12 @@ function Page() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!isBusy) setOpen(next);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Editar gasto" : "Novo gasto"}</DialogTitle>
@@ -286,10 +310,12 @@ function Page() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>
               Cancelar
             </Button>
-            <Button onClick={submit}>{editing ? "Salvar" : "Adicionar"}</Button>
+            <Button onClick={submit} disabled={isBusy}>
+              {isBusy ? "Salvando..." : editing ? "Salvar" : "Adicionar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

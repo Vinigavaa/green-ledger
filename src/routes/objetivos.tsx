@@ -23,9 +23,10 @@ import {
 } from "@/components/ui/select";
 import { useFinanceActions } from "@/lib/finance/actions";
 import { monthSummary, useHydrate, useStore } from "@/lib/finance/store";
-import { brl } from "@/lib/finance/format";
+import { brl, parseISODate } from "@/lib/finance/format";
 import type { Goal, Priority } from "@/lib/finance/types";
 import { toast } from "sonner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 export const Route = createFileRoute("/objetivos")({
   component: Page,
@@ -35,6 +36,36 @@ function emptyForm(): Omit<Goal, "id"> {
   return { name: "", target: 0, saved: 0, priority: "medium" };
 }
 
+function timeLabel(goal: Goal, remaining: number, monthlyAvailable: number) {
+  if (remaining <= 0) return "Concluido";
+
+  if (goal.deadline) {
+    const today = new Date();
+    const deadline = parseISODate(goal.deadline);
+
+    if (!Number.isNaN(deadline.getTime())) {
+      const diffMs = deadline.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) return "Prazo vencido";
+      if (diffDays <= 30) return `${diffDays} d`;
+
+      const diffMonths =
+        (deadline.getFullYear() - today.getFullYear()) * 12 +
+        (deadline.getMonth() - today.getMonth()) +
+        (deadline.getDate() >= today.getDate() ? 0 : -1);
+
+      return `${Math.max(1, diffMonths)} m`;
+    }
+  }
+
+  if (monthlyAvailable > 0) {
+    return `${Math.ceil(remaining / monthlyAvailable)} m`;
+  }
+
+  return "Sem estimativa";
+}
+
 function Page() {
   useHydrate();
   const data = useStore();
@@ -42,6 +73,7 @@ function Page() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const { isBusy, busyLabel, runBusy } = useBusyAction();
   const sum = useMemo(() => monthSummary(data, new Date()), [data]);
   const monthlyAvailable = Math.max(0, sum.balance);
 
@@ -57,15 +89,20 @@ function Page() {
   }
   async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
-    if (form.target <= 0) return toast.error("Meta inválida");
-    if (editing) {
-      await actions.updateGoal(editing.id, form);
-      toast.success("Objetivo atualizado");
-    } else {
-      await actions.addGoal(form);
-      toast.success("Objetivo adicionado");
-    }
-    setOpen(false);
+    if (form.target <= 0) return toast.error("Meta invÃ¡lida");
+    await runBusy(
+      async () => {
+        if (editing) {
+          await actions.updateGoal(editing.id, form);
+          toast.success("Objetivo atualizado");
+        } else {
+          await actions.addGoal(form);
+          toast.success("Objetivo adicionado");
+        }
+        setOpen(false);
+      },
+      editing ? "Salvando objetivo..." : "Adicionando objetivo...",
+    );
   }
 
   const priorityRank = { high: 0, medium: 1, low: 2 } as const;
@@ -74,12 +111,12 @@ function Page() {
   );
 
   return (
-    <AppShell>
+    <AppShell busy={isBusy} busyLabel={busyLabel}>
       <PageHeader
         title="Objetivos"
-        subtitle={`Disponível por mês para guardar: ${brl(monthlyAvailable)}`}
+        subtitle={`Disponí­vel por mês para guardar: ${brl(monthlyAvailable)}`}
         actions={
-          <Button onClick={openNew}>
+          <Button onClick={openNew} disabled={isBusy}>
             <Plus className="mr-1 h-4 w-4" /> Novo objetivo
           </Button>
         }
@@ -92,7 +129,7 @@ function Page() {
           {sorted.map((g) => {
             const remaining = Math.max(0, g.target - g.saved);
             const pct = Math.min(100, (g.saved / g.target) * 100);
-            const months = monthlyAvailable > 0 ? Math.ceil(remaining / monthlyAvailable) : null;
+            const remainingTime = timeLabel(g, remaining, monthlyAvailable);
             return (
               <div key={g.id} className="rounded-2xl border bg-card p-5 shadow-sm">
                 <div className="flex items-start justify-between">
@@ -100,19 +137,31 @@ function Page() {
                     <p className="font-semibold">{g.name}</p>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                       Prioridade{" "}
-                      {g.priority === "high" ? "alta" : g.priority === "medium" ? "média" : "baixa"}
+                      {g.priority === "high"
+                        ? "alta"
+                        : g.priority === "medium"
+                          ? "mÃ©dia"
+                          : "baixa"}
                     </p>
                   </div>
                   <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(g)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => openEdit(g)}
+                      disabled={isBusy}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
+                      disabled={isBusy}
                       onClick={async () => {
-                        await actions.removeGoal(g.id);
-                        toast.success("Removido");
+                        await runBusy(async () => {
+                          await actions.removeGoal(g.id);
+                          toast.success("Removido");
+                        }, "Removendo objetivo...");
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -140,7 +189,7 @@ function Page() {
                   </div>
                   <div className="rounded-lg bg-muted p-2">
                     <p className="text-muted-foreground">Tempo</p>
-                    <p className="font-semibold">{months !== null ? `${months} m` : "—"}</p>
+                    <p className="font-semibold">{remainingTime}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
@@ -148,14 +197,16 @@ function Page() {
                     type="number"
                     placeholder="Adicionar valor"
                     className="h-9"
+                    disabled={isBusy}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         const v = Number((e.target as HTMLInputElement).value);
                         if (v > 0) {
-                          void actions.updateGoal(g.id, { saved: g.saved + v }).then(() => {
+                          void runBusy(async () => {
+                            await actions.updateGoal(g.id, { saved: g.saved + v });
                             (e.target as HTMLInputElement).value = "";
                             toast.success("Valor guardado");
-                          });
+                          }, "Salvando valor guardado...");
                         }
                       }
                     }}
@@ -163,14 +214,16 @@ function Page() {
                   <Button
                     variant="secondary"
                     size="sm"
+                    disabled={isBusy}
                     onClick={(e) => {
                       const input = e.currentTarget.previousSibling as HTMLInputElement;
                       const v = Number(input?.value ?? 0);
                       if (v > 0) {
-                        void actions.updateGoal(g.id, { saved: g.saved + v }).then(() => {
+                        void runBusy(async () => {
+                          await actions.updateGoal(g.id, { saved: g.saved + v });
                           input.value = "";
                           toast.success("Valor guardado");
-                        });
+                        }, "Salvando valor guardado...");
                       }
                     }}
                   >
@@ -183,7 +236,12 @@ function Page() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!isBusy) setOpen(next);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Editar objetivo" : "Novo objetivo"}</DialogTitle>
@@ -194,7 +252,7 @@ function Page() {
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ex: Reserva de emergência"
+                placeholder="Ex: Reserva de emergÃªncia"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -237,7 +295,7 @@ function Page() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="high">Alta</SelectItem>
-                    <SelectItem value="medium">Média</SelectItem>
+                    <SelectItem value="medium">MÃ©dia</SelectItem>
                     <SelectItem value="low">Baixa</SelectItem>
                   </SelectContent>
                 </Select>
@@ -245,10 +303,12 @@ function Page() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>
               Cancelar
             </Button>
-            <Button onClick={submit}>{editing ? "Salvar" : "Adicionar"}</Button>
+            <Button onClick={submit} disabled={isBusy}>
+              {isBusy ? "Salvando..." : editing ? "Salvar" : "Adicionar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

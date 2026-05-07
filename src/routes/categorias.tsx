@@ -24,6 +24,7 @@ import { useFinanceActions } from "@/lib/finance/actions";
 import { useHydrate, useStore } from "@/lib/finance/store";
 import type { CategoryKind } from "@/lib/finance/types";
 import { toast } from "sonner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 export const Route = createFileRoute("/categorias")({
   component: Page,
@@ -39,22 +40,25 @@ function Page() {
     kind: "expense" as CategoryKind,
     color: "#10b981",
   });
+  const { isBusy, busyLabel, runBusy } = useBusyAction();
 
   async function submit() {
     if (!form.name.trim()) return toast.error("Informe um nome");
-    await actions.addCategory(form);
-    toast.success("Categoria criada");
-    setOpen(false);
-    setForm({ name: "", kind: "expense", color: "#10b981" });
+    await runBusy(async () => {
+      await actions.addCategory(form);
+      toast.success("Categoria criada");
+      setOpen(false);
+      setForm({ name: "", kind: "expense", color: "#10b981" });
+    }, "Adicionando categoria...");
   }
 
   return (
-    <AppShell>
+    <AppShell busy={isBusy} busyLabel={busyLabel}>
       <PageHeader
         title="Categorias"
         subtitle="Organize suas receitas e gastos"
         actions={
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={() => setOpen(true)} disabled={isBusy}>
             <Plus className="mr-1 h-4 w-4" /> Nova categoria
           </Button>
         }
@@ -72,7 +76,7 @@ function Page() {
                 <p className="text-sm font-medium">{c.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {c.kind === "income" ? "Receita" : c.kind === "expense" ? "Despesa" : "Ambos"}
-                  {c.custom && " · personalizada"}
+                  {c.custom && " Â· personalizada"}
                 </p>
               </div>
             </div>
@@ -80,9 +84,12 @@ function Page() {
               <Button
                 size="icon"
                 variant="ghost"
+                disabled={isBusy}
                 onClick={async () => {
-                  await actions.removeCategory(c.id);
-                  toast.success("Removida");
+                  await runBusy(async () => {
+                    await actions.removeCategory(c.id);
+                    toast.success("Removida");
+                  }, "Removendo categoria...");
                 }}
               >
                 <Trash2 className="h-4 w-4" />
@@ -92,7 +99,12 @@ function Page() {
         ))}
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!isBusy) setOpen(next);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nova categoria</DialogTitle>
@@ -134,10 +146,12 @@ function Page() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>
               Cancelar
             </Button>
-            <Button onClick={submit}>Adicionar</Button>
+            <Button onClick={submit} disabled={isBusy}>
+              {isBusy ? "Salvando..." : "Adicionar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

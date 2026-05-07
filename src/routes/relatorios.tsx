@@ -22,7 +22,7 @@ import {
   useHydrate,
   useStore,
 } from "@/lib/finance/store";
-import { brl } from "@/lib/finance/format";
+import { brl, sameMonth } from "@/lib/finance/format";
 
 export const Route = createFileRoute("/relatorios")({
   component: Page,
@@ -36,7 +36,7 @@ function Page() {
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
     data.expenses
-      .filter((e) => e.date.startsWith(ref.toISOString().slice(0, 7)))
+      .filter((e) => sameMonth(e.date, ref))
       .forEach((e) => map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + e.amount));
     return Array.from(map.entries()).map(([id, value]) => {
       const c = categoryById(data, id);

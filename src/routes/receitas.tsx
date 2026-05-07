@@ -28,6 +28,7 @@ import {
 import { brl, formatDateBR, todayISO } from "@/lib/finance/format";
 import type { Income } from "@/lib/finance/types";
 import { toast } from "sonner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 export const Route = createFileRoute("/receitas")({
   component: Page,
@@ -53,6 +54,7 @@ function Page() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const { isBusy, busyLabel, runBusy } = useBusyAction();
 
   const filtered = useMemo(() => {
     return incomesInMonth(data, month).filter((income) =>
@@ -78,26 +80,31 @@ function Page() {
     if (!form.name.trim()) return toast.error("Informe um nome");
     if (form.amount <= 0) return toast.error("Valor deve ser maior que zero");
 
-    if (editing) {
-      await actions.updateIncome(editing.id, form);
-      toast.success("Receita atualizada");
-    } else {
-      await actions.addIncome(form);
-      toast.success("Receita adicionada");
-    }
+    await runBusy(
+      async () => {
+        if (editing) {
+          await actions.updateIncome(editing.id, form);
+          toast.success("Receita atualizada");
+        } else {
+          await actions.addIncome(form);
+          toast.success("Receita adicionada");
+        }
 
-    setOpen(false);
+        setOpen(false);
+      },
+      editing ? "Salvando receita..." : "Adicionando receita...",
+    );
   }
 
   return (
-    <AppShell>
+    <AppShell busy={isBusy} busyLabel={busyLabel}>
       <PageHeader
         title="Receitas"
         subtitle={`Total no mês: ${brl(total)}`}
         actions={
           <>
             <MonthSwitcher value={month} onChange={setMonth} />
-            <Button onClick={openNew}>
+            <Button onClick={openNew} disabled={isBusy}>
               <Plus className="mr-1 h-4 w-4" /> Nova receita
             </Button>
           </>
@@ -112,7 +119,11 @@ function Page() {
         <EmptyState
           title="Nenhuma receita"
           description="Cadastre sua primeira receita do mês"
-          action={<Button onClick={openNew}>Adicionar receita</Button>}
+          action={
+            <Button onClick={openNew} disabled={isBusy}>
+              Adicionar receita
+            </Button>
+          }
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border bg-card">
@@ -155,11 +166,17 @@ function Page() {
                       <div className="flex justify-center">
                         <Switch
                           checked={income.received}
+                          disabled={isBusy}
                           onCheckedChange={async (checked) => {
-                            await actions.setIncomeReceived(income as MaterializedIncome, checked);
-                            toast.success(
-                              checked ? "Receita marcada como recebida" : "Receita desmarcada",
-                            );
+                            await runBusy(async () => {
+                              await actions.setIncomeReceived(
+                                income as MaterializedIncome,
+                                checked,
+                              );
+                              toast.success(
+                                checked ? "Receita marcada como recebida" : "Receita desmarcada",
+                              );
+                            }, "Atualizando receita...");
                           }}
                         />
                       </div>
@@ -172,7 +189,7 @@ function Page() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          disabled={Boolean(income.projected)}
+                          disabled={Boolean(income.projected) || isBusy}
                           onClick={() => openEdit(income)}
                         >
                           <Pencil className="h-4 w-4" />
@@ -180,10 +197,12 @@ function Page() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          disabled={Boolean(income.projected)}
+                          disabled={Boolean(income.projected) || isBusy}
                           onClick={async () => {
-                            await actions.removeIncome(income.id);
-                            toast.success("Receita removida");
+                            await runBusy(async () => {
+                              await actions.removeIncome(income.id);
+                              toast.success("Receita removida");
+                            }, "Removendo receita...");
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -198,7 +217,12 @@ function Page() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!isBusy) setOpen(next);
+        }}
+      >
         <DialogTrigger asChild>
           <span />
         </DialogTrigger>
@@ -269,10 +293,12 @@ function Page() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>
               Cancelar
             </Button>
-            <Button onClick={submit}>{editing ? "Salvar" : "Adicionar"}</Button>
+            <Button onClick={submit} disabled={isBusy}>
+              {isBusy ? "Salvando..." : editing ? "Salvar" : "Adicionar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
