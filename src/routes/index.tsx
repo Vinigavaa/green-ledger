@@ -137,13 +137,14 @@ function Dashboard() {
     () => sum.expenses.filter((expense) => expense.status === "paid"),
     [sum.expenses],
   );
+  const paidFixed = useMemo(() => sum.fixedActive.filter((fixed) => fixed.paid), [sum.fixedActive]);
   const paidInstallments = useMemo(
     () => sum.installments.filter((installment) => installment.paid),
     [sum.installments],
   );
   const pendingImpact = useMemo(
     () => [
-      ...sum.fixedActive.map((fixed) => ({
+      ...sum.fixedActive.filter((fixed) => !fixed.paid).map((fixed) => ({
         label: fixed.name,
         value: brl(fixed.amount),
         meta: `Fixo ativo • vencimento dia ${fixed.dueDay}`,
@@ -380,13 +381,18 @@ function Dashboard() {
         {
           title: "Saídas já abatidas",
           total: brl(sum.totalPaid),
-          description: "Só o que já foi marcado como pago reduz este card.",
+          description: "Saídas pagas manualmente e fixos já vencidos reduzem este card.",
           empty: "Nenhuma saída paga foi abatida até agora.",
           items: [
             ...paidExpenses.map((expense) => ({
               label: expense.name,
               value: brl(expense.amount),
               meta: "Gasto variável pago",
+            })),
+            ...paidFixed.map((fixed) => ({
+              label: fixed.name,
+              value: brl(fixed.amount),
+              meta: `Gasto fixo abatido após o vencimento do dia ${fixed.dueDay}`,
             })),
             ...paidInstallments.map((installment) => ({
               label: `${installment.installment.name} (${installment.index + 1}/${installment.installment.installments})`,
@@ -403,8 +409,8 @@ function Dashboard() {
         },
       ],
       notes: [
-        "Gastos fixos entram no saldo previsto, mas hoje não têm marcação individual de pago.",
-        "Por isso, o card de disponível só desconta gastos variáveis pagos e parcelas pagas.",
+        "Gastos fixos passam a ser abatidos automaticamente depois que o dia de vencimento já passou.",
+        "Antes do vencimento, eles continuam afetando apenas o saldo previsto.",
       ],
     };
   }, [
@@ -412,6 +418,7 @@ function Dashboard() {
     excludedIncomes,
     futureFixed,
     paidExpenses,
+    paidFixed,
     paidInstallments,
     pendingImpact,
     ref,

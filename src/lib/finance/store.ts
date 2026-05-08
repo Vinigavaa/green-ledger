@@ -30,6 +30,12 @@ export interface MaterializedIncome extends Income {
   sourceId?: string;
 }
 
+export interface MaterializedFixedExpense extends FixedExpense {
+  dueDate: Date;
+  paid: boolean;
+  status: "paid" | "pending";
+}
+
 function monthKey(date: Date) {
   return date.getFullYear() * 12 + date.getMonth();
 }
@@ -43,6 +49,14 @@ function startsOnOrBeforeMonth(sourceDate: string, ref: Date) {
 function dueDateForMonth(expense: FixedExpense, ref: Date) {
   const lastDayOfMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
   return new Date(ref.getFullYear(), ref.getMonth(), Math.min(expense.dueDay, lastDayOfMonth));
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isPastDay(date: Date, ref: Date) {
+  return startOfDay(date).getTime() < startOfDay(ref).getTime();
 }
 
 function projectedRecurringDate(sourceDate: string, ref: Date) {
@@ -128,10 +142,24 @@ export function installmentsInMonth(s: DataStore, ref: Date) {
   return out;
 }
 
-export function fixedExpensesInMonth(s: DataStore, ref: Date) {
-  return s.fixed.filter(
-    (expense) => expense.active && startsOnOrBeforeMonth(expense.startDate, ref),
-  );
+export function fixedExpensesInMonth(
+  s: DataStore,
+  ref: Date,
+  now = new Date(),
+): MaterializedFixedExpense[] {
+  return s.fixed
+    .filter((expense) => expense.active && startsOnOrBeforeMonth(expense.startDate, ref))
+    .map((expense) => {
+      const dueDate = dueDateForMonth(expense, ref);
+      const paid = isPastDay(dueDate, now);
+
+      return {
+        ...expense,
+        dueDate,
+        paid,
+        status: paid ? "paid" : "pending",
+      };
+    });
 }
 
 function hasPriorActivity(s: DataStore, ref: Date) {
@@ -162,6 +190,7 @@ export function monthSummary(s: DataStore, ref: Date) {
 
   const fixedActive = fixedExpensesInMonth(s, ref);
   const fixedTotal = fixedActive.reduce((a, b) => a + b.amount, 0);
+  const fixedPaid = fixedActive.filter((expense) => expense.paid).reduce((a, b) => a + b.amount, 0);
 
   const inst = installmentsInMonth(s, ref);
   const instTotal = inst.reduce((a, b) => a + b.amount, 0);
@@ -169,7 +198,7 @@ export function monthSummary(s: DataStore, ref: Date) {
 
   const openingBalance = hasPriorActivity(s, ref) ? monthSummary(s, previousMonth(ref)).balance : 0;
   const totalExpenses = variableTotal + fixedTotal + instTotal;
-  const totalPaid = variablePaid + instPaid;
+  const totalPaid = variablePaid + fixedPaid + instPaid;
   const monthResult = incomesTotal - totalExpenses;
   const balance = openingBalance + monthResult;
   const available = openingBalance + incomesTotal - totalPaid;
@@ -208,19 +237,16 @@ export function upcomingPayments(s: DataStore, ref: Date, days = 30) {
   const out: UpcomingPayment[] = [];
   const limit = Math.max(1, days);
 
-  s.fixed
-    .filter((f) => f.active && startsOnOrBeforeMonth(f.startDate, ref))
-    .forEach((f) => {
-      const d = dueDateForMonth(f, ref);
-      out.push({
-        id: f.id,
-        name: f.name,
-        amount: f.amount,
-        date: d,
-        kind: "fixed",
-        status: d < now ? "late" : "pending",
-      });
+  fixedExpensesInMonth(s, ref, now).forEach((f) => {
+    out.push({
+      id: f.id,
+      name: f.name,
+      amount: f.amount,
+      date: f.dueDate,
+      kind: "fixed",
+      status: f.status,
     });
+  });
 
   installmentsInMonth(s, ref).forEach((i) => {
     out.push({
@@ -229,7 +255,7 @@ export function upcomingPayments(s: DataStore, ref: Date, days = 30) {
       amount: i.amount,
       date: i.date,
       kind: "installment",
-      status: i.paid ? "paid" : i.date < now ? "late" : "pending",
+      status: i.paid ? "paid" : isPastDay(i.date, now) ? "late" : "pending",
     });
   });
 
@@ -243,7 +269,7 @@ export function upcomingPayments(s: DataStore, ref: Date, days = 30) {
         amount: e.amount,
         date: d,
         kind: "expense",
-        status: d < now ? "late" : "pending",
+        status: isPastDay(d, now) ? "late" : "pending",
       });
     });
 
